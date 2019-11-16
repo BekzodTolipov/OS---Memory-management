@@ -4,8 +4,11 @@
 #define FIVE_HUNDRED_MILLION 500000000
 
 #define MAX_PROCESS 18
+#define MAXCHAR 1024
+#define PAGE_TABLE_SIZE 32
 //#define NUMBER_OF_RESOURCES 20
 
 const unsigned int FIVE_HUNDRED_MS = FIVE_HUNDRED_MILLION;
+
 
 #endif
