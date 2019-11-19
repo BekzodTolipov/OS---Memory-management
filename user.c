@@ -38,10 +38,13 @@ void sem_lock(int sem_index);
 void sem_release(int sem_index);
 void processInterrupt();
 void processHandler(int signum);
+bool event_occured(unsigned int pct_chance);
 
 struct page{
 	unsigned int page_numb : 15;
 };
+
+const unsigned int CHANCE_R_W = 50;
 
 int main(int argc, char *argv[]){
 	srand(time(NULL) ^ getpid());
@@ -72,9 +75,10 @@ int main(int argc, char *argv[]){
 	start.sec = end.sec = system_clock->sec;
 	start.ns = end.ns = system_clock->ns;
 	sem_release(0);
+	int total_mem_ref = 0;
 	while(1){
 		//Waiting for master signal to get resources
-	//	fprintf(stderr, "USER: Waiting for master (%d)\n", getpid());
+	//	fprintf(stderr, "USER: Waiting for master (%d)\n\n\n", getpid());
 		msgrcv(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), getpid(), 0);
 
 		if(!min_run_time){
@@ -84,36 +88,90 @@ int main(int argc, char *argv[]){
 			sem_release(0);
 			if((end.sec - start.sec) >= 1){
 				min_run_time = true;
-				fprintf(stderr, "--USER: I (%d) ran for 1 second\n", pid);
+				//fprintf(stderr, "--USER: I (%d) ran for 1 second\n", pid);
 			}
 		}
-		
+		//Memory reference
 		struct page pn;
 		pn.page_numb = rand() % 32768 + 1;
+		total_mem_ref++;
+	//	fprintf(stderr, "--USER: I (%d) generated page# %d\n", pid, pn.page_numb>>10);
 
 		if(pcb[pid].pg_tbl[(pn.page_numb>>10)].valid == 0){
-		//	fprintf(stderr, "USER REQUEST: Address is empty need to request at page(%u), 10 shift right(%d)\n", pn.page_numb, (pn.page_numb>>10));
+		//	total_request++;
+			fprintf(stderr, "USER REQUEST: PID[%d] Address is empty need to request at page(%u), 10 shift right(%d)\n", pid, pn.page_numb, (pn.page_numb>>10));
 			//Request
 			msg.mtype = 1;
 			msg.flag = 1;
 			msg.is_request = 1;
-			msg.page_number = pn.page_numb;	
+			msg.page_number = pn.page_numb;
+			//msg.read_write = (event_occured(CHANCE_R_W)? 1 : 0);	
 			msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
 			
 			//Wait for grant
 			msgrcv(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), getpid(), 0);
-			fprintf(stderr, "USER GRANTED: Received message letting me know that its granted and changed addreess to (%d)\n", pcb[pid].pg_tbl[(pn.page_numb>>10)].address);
+			fprintf(stderr, "USER GRANTED: PID[%d] Received message letting me know that its granted and changed addreess to (%d)\n", pid, pcb[pid].pg_tbl[(pn.page_numb>>10)].address);
+			
+	//		if(event_occured(CHANCE_R_W)){
+	//			msg.mtype = 1;
+	//			msg.read_write = 1;
+	//			msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
+	//		}
+			//continue;
 		//	if(msg.granted){
 		//		continue;
 		//	}
 		}
 		else{
-			fprintf(stderr, "USER FINISHED: Letting know that I am done, adress has (%u)\n\n", pcb[pid].pg_tbl[(pn.page_numb>>10)].address);
-			msg.mtype = 1;
-			msg.flag = 0;	//Process is done
-			msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
-			break;
+			if(pcb[pid].pg_tbl[(pn.page_numb>>10)].address != (pn.page_numb>>10)){
+				fprintf(stderr, "--USER ADDRESS: Address belongs to me pid(%d)\n", pid);
+			//	msg.mtype = 1;
+			//	msg.flag = 1;
+			//	msg.is_request = 1;
+			//	msg.page_number = pn.page_numb;	
+			//	msg.read_write = (event_occured(CHANCE_R_W)? 1 : 0);	
+			//	msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
+				
+				//continue;
+		//		msgrcv(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), getpid(), 0);
+			//	continue;
+			}
+			else{
+				//fprintf(stderr, "++USER ADDRESS: Address DOES NOT belong to me pid(%d)\n", pid);
+			}
+		//	if(total_request > 1000){	//Turn it to random number min 1000 max 1100!!!
+		//		fprintf(stderr, "--USER FINISHED: Letting know that I am done, adress has (%u)\n\n", pcb[pid].pg_tbl[(pn.page_numb>>10)].address);
+		//		msg.mtype = 1;
+		//		msg.flag = 0;	//Process is done
+		//		msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
+		//		break;
+		//	}
+		//	else{
+		//		//fprintf(stderr, "USER: Blank message sent\n\n");
+		//		msg.mtype = 1;
+		//		msg.blank_msg = 1;
+		//		msg.flag = 1;
+		//		msg.is_request = false;
+		//		msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
+		//	}
 		}
+		if(total_mem_ref > 1000){   //Turn it to random number min 1000 max 1100!!!
+            sprintf(msg.mtext, "--USER FINISHED: Letting know that I am done, adress has (%u)\n\n", pcb[pid].pg_tbl[(pn.page_numb>>10)].address);
+            msg.mtype = 1;
+            msg.flag = 0;   //Process is done
+            msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
+            break;
+        }
+        else{
+			continue;
+			fprintf(stderr, "USER: Blank message sent\n\n");
+            msg.mtype = 1;
+            msg.blank_msg = 1;
+            msg.flag = 1;
+            msg.is_request = false;
+            msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
+		}
+
 
 //		fprintf(stderr, "USER FINISHED: Letting know that I am done\n\n");
 		//Send a message to master that I got the signal and master should invoke an action base on my "choice"
@@ -135,7 +193,7 @@ void processInterrupt()
 	sigemptyset(&sa1.sa_mask);
 	sa1.sa_handler = &processHandler;
 	sa1.sa_flags = SA_RESTART;
-	if(sigaction(SIGUSR1, &sa1, NULL) == -1)
+	if(sigaction(SIGTERM, &sa1, NULL) == -1)
 	{
 		perror("ERROR");
 	}
@@ -151,7 +209,8 @@ void processInterrupt()
 }
 void processHandler(int signum)
 {
-	printf("%d: Terminated!\n", getpid());
+//	_exit(0);
+	fprintf(stderr, "%d: Terminated!\n", getpid());
 	detach_from_shared_memory(pcb);
 	detach_from_shared_memory(system_clock);
 	exit(2);
@@ -184,4 +243,14 @@ void sem_release(int sem_index)
 	sema_operation.sem_op = 1;
 	sema_operation.sem_flg = 0;
 	semop(semid, &sema_operation, 1);
+}
+
+bool event_occured(unsigned int pct_chance) {
+    unsigned int percent = (rand() % 100) + 1;
+    if (percent <= pct_chance) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
 }

@@ -173,6 +173,7 @@ int main(int argc, char *argv[]){
 	unsigned int id = -1;
 	bool is_bit_open = false;
 	bool already_clean = false;
+	int total_page_faults = 0;
 	while(1){
 		if (compare_clocks(*system_clock, fork_time) >= 0) {	//Compare clock will return (a>b:1), (a==b:0), (a<b:-1)
 			is_bit_open = false;
@@ -240,9 +241,9 @@ int main(int argc, char *argv[]){
 				//	fflush(fptr);
 				}
 			}
-			else{
-				break;
-			}
+		//	else{
+		//		break;
+		//	}
 			fork_time = get_fork_time_new_proc(*system_clock);
 		} //End of compare clock
 		sem_lock(0);
@@ -266,11 +267,13 @@ int main(int argc, char *argv[]){
 			master_msg.pid = q_id;
 			master_msg.actual_pid = pcb[q_id].actual_pid;
 		//	fprintf(stderr, "MASTER: Sending message to user (%d)\n", pcb[q_id].actual_pid);
+			//fprintf(stderr, "++MASTER: waiting for message from pid(%d)\n", q_id);
 			msgsnd(msg_q_id, &master_msg, (sizeof(struct Message) - sizeof(long)), 0);
 
+		//	fprintf(stderr, "++MASTER: waiting for message\n");
 			//Waiting for the specific child to respond back
 			msgrcv(msg_q_id, &master_msg, (sizeof(struct Message) - sizeof(long)), 1, 0);
-		//	fprintf(stderr, "MASTER: Received message from user\n");
+			fprintf(stderr, "MASTER MESSAGE: request?(%d) pid(%d)\n", master_msg.is_request, master_msg.pid);
 			
 			if(master_msg.flag == 0){	// Remove from queue process
 				fprintf(stderr, "MASTER: process with PID (%d) [%d] has finish running at my time %d.%d\n", master_msg.pid, master_msg.actual_pid, system_clock->sec, system_clock->ns);
@@ -316,20 +319,35 @@ int main(int argc, char *argv[]){
 			// Check if it is a request
 			if(master_msg.is_request == true)
 			{	
-				fprintf(stderr, "MASTER REQUEST: process with PID (%d) [%d] is REQUESTING resources. Granting request...\n",
-					master_msg.pid, master_msg.actual_pid);
-				pcb[q_id].pg_tbl[(master_msg.page_number>>10)].valid = 1;
-				pcb[q_id].pg_tbl[(master_msg.page_number>>10)].address = ((master_msg.page_number>>10)+32*master_msg.pid);
+			///	if((pcb[q_id].pg_tbl[(master_msg.page_number>>10)].valid) == 0){
+					fprintf(stderr, "MASTER REQUEST: process with PID (%d) [%d] is REQUESTING resources. Granting request...\n",
+						master_msg.pid, master_msg.actual_pid);
+					pcb[q_id].pg_tbl[(master_msg.page_number>>10)].valid = 1;
+					pcb[q_id].pg_tbl[(master_msg.page_number>>10)].address = (master_msg.page_number>>10);
+					//pcb[q_id].pg_tbl[(master_msg.page_number>>10)].dirty = (master_msg.read_write)? 1 : 0;
 				
-				//Send a message to child process whether if it safe to proceed the request OR not
-				master_msg.mtype = pcb[q_id].actual_pid;
-				//Signal that request is granted
-				msgsnd(msg_q_id, &master_msg, (sizeof(struct Message) - sizeof(long)), 0);
+					//Send a message to child process whether if it safe to proceed the request OR not
+				//	master_msg.mtype = pcb[q_id].actual_pid;
+					//Signal that request is granted
+				//	msgsnd(msg_q_id, &master_msg, (sizeof(struct Message) - sizeof(long)), 0);
 
-				//Check if its read or write
+					//Check if its read or write
 				
-				//wait for message
-				//if write than dirty bit is up
+					//wait for message
+					//if write than dirty bit is up
+		//		}
+		//		else{
+		//			total_page_faults++;
+					//master_msg.mtype = pcb[q_id].actual_pid;
+		//			fprintf(stderr, "MASTER PAGE-FAULT: PID (%d) page fault accoured\n", master_msg.pid);
+				//	msgsnd(msg_q_id, &master_msg, (sizeof(struct Message) - sizeof(long)), 0);
+				//	if(mastermsg.read_write == 1){
+				//		pcb[q_id].pg_tbl[(master_msg.page_number>>10)].dirty = 1;
+				//	}
+			//	}
+					master_msg.mtype = pcb[q_id].actual_pid;
+					msgsnd(msg_q_id, &master_msg, (sizeof(struct Message) - sizeof(long)), 0);
+			//	fprintf(stderr, "-----------DID NOT MATCH ANYTHING valid?(%d)\n\n", pcb[q_id].pg_tbl[(master_msg.page_number>>10)].valid);
 
 			} //End of Request flag
 
@@ -514,12 +532,35 @@ struct Clock get_fork_time_new_proc(struct Clock system_clock) {
 ***************************************/
 void terminate_children() {
 	fprintf(stderr, "\nLimitation has reached! Invoking termination...\n");
-	kill(0, SIGUSR1);
-	pid_t p = 0;
-	while(p >= 0)
-	{
-		p = waitpid(-1, NULL, WNOHANG);
-	}
+	int id = 0;
+	int proc_count = 0;
+	while(1){
+		id = id % MAX_PROCESS;
+		uint32_t bit = bit_map[id / 8] & (1 << (id % 8));
+		if(bit == 0){
+			if(pcb[id].actual_pid != 0){
+				if(kill(pcb[id].actual_pid, 0) == 0){
+					if(kill(pcb[id].actual_pid, SIGTERM) != 0){
+						perror("Child can't be terminated for unkown reason\n");
+					}
+				}
+			}
+		}
+
+		if(proc_count >= MAX_PROCESS - 1){
+					//fprintf(stderr, "%s: bitmap is full (size: %d)\n", MAX_PROCESS);
+			break;
+		}
+		proc_count++;
+	} //End of bit_map
+
+	//kill(0, SIGTERM);
+	//pid_t p = 0;
+	//while(p >= 0)
+	//{
+		//fprintf(stderr, "KILL: Killing pid(%d)\n", p);
+	//	p = waitpid(-1, NULL, WNOHANG);
+	//}
 }
 
 /**************************************
@@ -588,6 +629,7 @@ static void setupinterrupt(){
 		perror("ERROR");
 	}
 
+	fprintf(stderr, "OSS: Sending the signal\n");
 	//Signal Handling for: SIGUSR1
 	signal(SIGUSR1, SIG_IGN);	
 }

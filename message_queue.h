@@ -12,7 +12,8 @@ struct Message{
     bool is_request;
     bool is_release;
 	bool granted;
-	bool read_or_write;
+	bool read_write;
+	bool blank_msg;
 	unsigned int page_number : 15;
     //bool isSafe;
     char mtext[SIZE];
