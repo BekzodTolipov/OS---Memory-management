@@ -13,11 +13,12 @@ MATH = -lm
 
 HEADER_FILE = shared_mem.h
 
-SHARE_OBJ = message_queue.o shared.o queue.o
-SHARE_HEAD = global_constants.h message_queue.h shared.h queue.h
+SRC = global_constants.h shared.h
+SHARE_OBJ = message_queue.o queue.o shared_memory.o
+SHARE_HEAD = message_queue.h queue.h shared_memory.h
 
 
-%.o: %.c $(SHARE_HEAD)
+%.o: %.c $(SRC) $(SHARE_HEAD)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 all: $(MASTER_EXE) $(CHILD_EXE)
