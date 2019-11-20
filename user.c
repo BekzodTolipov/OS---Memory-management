@@ -72,6 +72,8 @@ int main(int argc, char *argv[]){
 	start.sec = end.sec = system_clock->sec;
 	start.ns = end.ns = system_clock->ns;
 	sem_release(0);
+	int total_mem_ref = 0;
+	bool allowed = true;
 	while(1){
 		//Waiting for master signal to get resources
 	//	fprintf(stderr, "USER: Waiting for master (%d)\n", getpid());
@@ -84,15 +86,16 @@ int main(int argc, char *argv[]){
 			sem_release(0);
 			if((end.sec - start.sec) >= 1){
 				min_run_time = true;
-				fprintf(stderr, "--USER: I (%d) ran for 1 second\n", pid);
+				//fprintf(stderr, "--USER: I (%d) ran for 1 second\n", pid);
 			}
 		}
 		
 		struct page pn;
 		pn.page_numb = rand() % 32768 + 1;
+		total_mem_ref++;
 
 		if(pcb[pid].pg_tbl[(pn.page_numb>>10)].valid == 0){
-		//	fprintf(stderr, "USER REQUEST: Address is empty need to request at page(%u), 10 shift right(%d)\n", pn.page_numb, (pn.page_numb>>10));
+			//fprintf(stderr, "USER REQUEST: Address is empty need to request at page(%u), 10 shift right(%d)\n", pn.page_numb, (pn.page_numb>>10));
 			//Request
 			msg.mtype = 1;
 			msg.flag = 1;
@@ -103,17 +106,61 @@ int main(int argc, char *argv[]){
 			//Wait for grant
 			msgrcv(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), getpid(), 0);
 			fprintf(stderr, "USER GRANTED: Received message letting me know that its granted and changed addreess to (%d)\n", pcb[pid].pg_tbl[(pn.page_numb>>10)].address);
+			msg.mtype = 1;
+			msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
+			allowed = false;
 		//	if(msg.granted){
 		//		continue;
 		//	}
 		}
+//		else if(total_mem_ref > 1000){
+//			fprintf(stderr, "USER FINISHED: Letting know that I am done, adress has (%u)\n\n", pcb[pid].pg_tbl[(pn.page_numb>>10)].address);
+		//	sleep(2);
+//			msg.mtype = 1;
+//			msg.flag = 0;
+//			msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
+//			break;
+//		}
 		else{
-			fprintf(stderr, "USER FINISHED: Letting know that I am done, adress has (%u)\n\n", pcb[pid].pg_tbl[(pn.page_numb>>10)].address);
-			msg.mtype = 1;
-			msg.flag = 0;	//Process is done
-			msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
-			break;
+			if(total_mem_ref < 1000){
+			//	fprintf(stderr, "\nUSER MODIFIED: Letting know that I am done, total reference (%d)\n", total_mem_ref);
+				msg.mtype = 1;
+				msg.read_or_write = 1;	//Process is done
+				msg.is_request = 0;
+				msg.flag = 1;
+				msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
+			}//break;
 		}
+
+//		if(total_mem_ref > 1000){
+//			msg.mtype = 1;
+//			msg.flag = 0;
+//			msgs
+//		else{
+//			//fprintf(stderr, "USER FINISHED: Letting know that I am done, adress has (%u)\n\n", pcb[pid].pg_tbl[(pn.page_numb>>10)].address);
+//			msg.mtype = 1;
+//			msg.read_or_write = 1;	//Process is done
+//			msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
+//			//break;
+//		}
+		if(allowed){
+			//fprintf(stderr, "Checking total ref(%d)\n", total_mem_ref);
+			if(total_mem_ref >= 1000){
+			//	fprintf(stderr, "------------USER FINISHED: Sending message to OSS that I am done \n\n");
+				msg.mtype = 1;
+				msg.flag = 0;
+				msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
+			
+				msgrcv(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), getpid(), 0);
+				fprintf(stderr, "USER FINISHED: OSS let me to turn off \n\n");
+				break;
+			}
+		//	else{
+		//		fprintf(stderr, "USER FAIL\n\n");
+		//	}
+		}
+
+		allowed = true;
 
 //		fprintf(stderr, "USER FINISHED: Letting know that I am done\n\n");
 		//Send a message to master that I got the signal and master should invoke an action base on my "choice"
