@@ -39,6 +39,7 @@ unsigned int granted = 0;
 unsigned int total_fifo = 0;
 unsigned int total_lru = 0;
 bool fifo_or_lru = true;
+int child_pids[MAX_PROCESS];
 
 //Shared memory
 static int msg_q_id, semid, pcb_shmid, clock_shmid = -1;
@@ -128,6 +129,7 @@ int main(int argc, char *argv[]){
 	//Zero out all elements of bit map
 	memset(bit_map, '\0', sizeof(bit_map));
 	memset(main_memory, '\0', sizeof(main_memory));
+	memset(child_pids, 0, sizeof(child_pids));
 
 	setuptimer(max_time);
 	// System Interrupt set up
@@ -252,6 +254,7 @@ int main(int argc, char *argv[]){
 					total_process++;
 					//fprintf(stderr, "MASTER: Current (%d) is open at time %d.%d\n", id, system_clock->sec, system_clock->ns);
 					bit_map[id / 8] |= (1 << (id % 8));
+					child_pids[id] = child_pid;
 					
 					__init_pcb(&pcb[id], id, child_pid);
 					//Add the process to highest queue
@@ -402,6 +405,7 @@ int main(int argc, char *argv[]){
 					//	print_list(fifo_head);
 						page_faults++;
 						frame = clear_and_pop();
+	memset(main_memory, '\0', sizeof(main_memory));
 						total_fifo++;
 					//	fprintf(stderr, "FIFO AFTER POP: \n");
 					//	print_list(fifo_head);
@@ -462,6 +466,13 @@ int main(int argc, char *argv[]){
 		//Set the return index bit back to zero (which mean there is a spot open for this specific index in the bitmap)
 		if(finish_pid > 0)
 		{
+			int j;
+			for(j=0; j<MAX_PROCESS; j++){
+				if(child_pids[j] == finish_pid){
+					child_pids[j] = 0;
+					break;
+				}
+			}
 			int return_index = WEXITSTATUS(child_status);
 			bit_map[return_index / 8] &= ~(1 << (return_index % 8));
 			int b;
@@ -694,26 +705,27 @@ void terminate_children() {
 	//	p = waitpid(-1, NULL, WNOHANG);
 	//}
 	fprintf(stderr, "\nTerminate sequence initiated..\n");
-	int id = -1;
-	int proc_count = 0;
-	while(1){
-		id = (id+1) % MAX_PROCESS;
-		uint32_t bit = bit_map[id / 8] & (1 << (id % 8));
-		if(bit == 1){
-			if(pcb[id].actual_pid != 0){
-				if(kill(pcb[id].actual_pid, 0) == 0){
-					if(kill(pcb[id].actual_pid, SIGTERM) != 0){
+	int id;
+	//int proc_count = 0;
+	for(id = 0; id < MAX_PROCESS; id++){
+		//id = (id+1) % MAX_PROCESS;
+		//uint32_t bit = bit_map[id / 8] & (1 << (id % 8));
+	//	if(bit == 1){
+			if(child_pids[id] != 0){
+				if(kill(child_pids[id], 0) == 0){
+					fprintf(stdout, "TERMINATE: PID(%d)\n", child_pids[id]);
+					if(kill(child_pids[id], SIGTERM) != 0){
 						perror("Child can't be terminated for unkown reason\n");
 					}
 				}
 			}
-		}
+		//}
 
-		if(proc_count >= MAX_PROCESS - 1){
+	//	if(proc_count >= MAX_PROCESS - 1){
 					//fprintf(stderr, "%s: bitmap is full (size: %d)\n", MAX_PROCESS);
-			break;
-		}
-		proc_count++;
+	//		break;
+	//	}
+	//	proc_count++;
 	} //End of bit_map
 }
 
