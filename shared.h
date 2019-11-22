@@ -1,7 +1,6 @@
 #ifndef MY_SHARED_H
 #define MY_SHARED_H
 #include <stdbool.h>
-//#include "global_constants.h"
 
 typedef unsigned int uint;
 
@@ -22,8 +21,6 @@ typedef struct {
 struct process_control_block{
 	int pid;
 	pid_t actual_pid;
-//	int request[MAX_RESOURCE];
-//	int release[MAX_RESOURCE];
 	pg_tbl_ent_t pg_tbl[32];
 };
 

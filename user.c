@@ -1,3 +1,17 @@
+/*********************************************************************************************
+	Program Description: This program will be executed by child processes created in oss.
+	It will start attaching to pcb and clock in shared memory.
+	First process will check if page block is in main memory by checking its valid bit. If
+	its invlaid than it will proceed to request oss to put it in main memory by incrementing
+	page_fault.
+	If its valid than process checks protection bit to see if it can access it to write into
+	it. If process modified the frame, it will let oss know, so it can modify the dirty bit.
+	After 1000+-100 references, process will determen if its going to terminate.
+
+	Author: Bekzod Tolipov
+	Date: 11/22/2019
+*********************************************************************************************/
+
 #include <stdlib.h>     //exit()
 #include <stdio.h>      //printf()
 #include <stdbool.h>    //bool variable
@@ -46,6 +60,7 @@ struct page{
 int main(int argc, char *argv[]){
 	processInterrupt();
 	srand(time(NULL) ^ getpid());
+	int max_ref = rand()%100 + 1000;
 	/* =====Getting semaphore===== */
 	key_t key = ftok("./oss.c", 21);
 	semid = semget(key, 1, 0600);
@@ -64,15 +79,12 @@ int main(int argc, char *argv[]){
 	// Attach to shared memory
 	system_clock = attach_shared_memory(clock_shmid, 1);
     pcb = attach_shared_memory(pcb_shmid, 0);
-    //struct Clock time_to_request_release  = get_time_to_request_release_rsc(*sysclock);
 
 	sem_lock(0);
 	sem_release(0);
 	int total_mem_ref = 0;
 	bool allowed = true;
 	while(1){
-		//Waiting for master signal to get resources
-	//	fprintf(stderr, "USER: Waiting for master (%d)\n", getpid());
 		msgrcv(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), getpid(), 0);
 		
 		struct page pn;
@@ -90,24 +102,12 @@ int main(int argc, char *argv[]){
 			
 			//Wait for grant
 			msgrcv(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), getpid(), 0);
-			//sprintf(msg.mtext, "USER GRANTED: Received message letting me know that its granted and changed addreess to (%d) at time %d.%d\n", pcb[pid].pg_tbl[(pn.page_numb>>10)].address, system_clock->sec, system_clock->ns);
 			msg.mtype = 1;
 			msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
 			allowed = false;
-		//	if(msg.granted){
-		//		continue;
-		//	}
 		}
-//		else if(total_mem_ref > 1000){
-//			fprintf(stderr, "USER FINISHED: Letting know that I am done, adress has (%u)\n\n", pcb[pid].pg_tbl[(pn.page_numb>>10)].address);
-		//	sleep(2);
-//			msg.mtype = 1;
-//			msg.flag = 0;
-//			msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
-//			break;
-//		}
 		else{
-			if(total_mem_ref < 1000){
+			if(total_mem_ref < max_ref){
 				if(pcb[pid].pg_tbl[(pn.page_numb>>10)].protn == 1){
 					sprintf(msg.mtext, "\nUSER MODIFIED: PID(%d) Letting oss know that I modified block in memory at time %d.%d\n", pid, system_clock->sec, system_clock->ns);
 					msg.read_or_write = 1;
@@ -116,35 +116,21 @@ int main(int argc, char *argv[]){
 					msg.read_or_write = 1;
 				}
 				msg.mtype = 1;
-				//msg.read_or_write = 1;
 				msg.is_request = 0;
 				msg.flag = 1;
 				msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
-			}//break;
+			}
 		}
 
-//		if(total_mem_ref > 1000){
-//			msg.mtype = 1;
-//			msg.flag = 0;
-//			msgs
-//		else{
-//			//fprintf(stderr, "USER FINISHED: Letting know that I am done, adress has (%u)\n\n", pcb[pid].pg_tbl[(pn.page_numb>>10)].address);
-//			msg.mtype = 1;
-//			msg.read_or_write = 1;	//Process is done
-//			msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
-//			//break;
-//		}
 		if(allowed){
-			//fprintf(stderr, "Checking total ref(%d)\n", total_mem_ref);
-			if(total_mem_ref >= 1000){
-				if(rand()%2){
+			if(total_mem_ref >= max_ref){
+				if(rand()%2){	// Randomly decide if finish or keep continue
 					sprintf(msg.mtext, "------------USER FINISHED: PID(%d) Sending message to OSS that I finished my job at time %d.%d\n\n", pid, system_clock->sec, system_clock->ns);
 					msg.mtype = 1;
 					msg.flag = 0;
 					msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
 			
 					msgrcv(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), getpid(), 0);
-			//	fprintf(stderr, "USER FINISHED: OSS let me to turn off \n\n");
 					break;
 				}
 				else{
@@ -159,25 +145,13 @@ int main(int argc, char *argv[]){
 					sprintf(msg.mtext, "\nUSER MODIFIED: PID(%d) Letting oss know that I modified block in memory at time %d.%d\n", pid, system_clock->sec, system_clock->ns);
 					msg.mtype = 1;
 					msg.flag = 1;
-					//msg.read_or_write = 1;
 					msg.is_request = 0;
 					msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
 				}
 			}
-		//	else{
-		//		fprintf(stderr, "USER FAIL\n\n");
-		//	}
 		}
 
 		allowed = true;
-
-//		fprintf(stderr, "USER FINISHED: Letting know that I am done\n\n");
-		//Send a message to master that I got the signal and master should invoke an action base on my "choice"
-//		msg.mtype = 1;
-//		msg.flag = 0;	//Process is done
-
-//		msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
-//		break;
 	}
 
 	detach_from_shared_memory(pcb);
@@ -197,30 +171,15 @@ void processInterrupt()
 		perror("ERROR");
 		exit(1);
 	}
-
-//	struct sigaction sa2;
-//	sigemptyset(&sa2.sa_mask);
-//	sa2.sa_handler = &processHandler;
-//	sa2.sa_flags = SA_RESTART;
-//	if(sigaction(SIGINT, &sa2, NULL) == -1)
-//	{
-//		perror("ERROR");
-//	}
 }
+
 void processHandler(int signum)
 {
-	//printf("%d: Terminated!\n", getpid());
 	detach_from_shared_memory(pcb);
 	detach_from_shared_memory(system_clock);
 	exit(1);
 }
 
-/* ====================================================================================================
-* Function    :  semaLock()
-* Definition  :  Invoke semaphore lock of the given semaphore and index.
-* Parameter   :  Semaphore Index.
-* Return      :  None.
-==================================================================================================== */
 void sem_lock(int sem_index)
 {
 	sema_operation.sem_num = sem_index;
@@ -229,13 +188,6 @@ void sem_lock(int sem_index)
 	semop(semid, &sema_operation, 1);
 }
 
-
-/* ====================================================================================================
-* Function    :  semaRelease()
-* Definition  :  Release semaphore lock of the given semaphore and index.
-* Parameter   :  Semaphore Index.
-* Return      :  None.
-==================================================================================================== */
 void sem_release(int sem_index)
 {	
 	sema_operation.sem_num = sem_index;
