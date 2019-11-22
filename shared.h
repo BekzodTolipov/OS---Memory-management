@@ -12,7 +12,7 @@ struct Clock {
 
 typedef struct {
 	uint address : 8;
-	uint protn : 4;
+	uint protn : 1;
 	uint dirty : 1;
 	uint ref : 1;
 	uint valid : 1;

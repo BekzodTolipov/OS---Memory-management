@@ -125,3 +125,46 @@ int getQueueCount(struct Queue *q)
 {
 	return (q->count);	
 }
+
+/*
+	FIFO push
+*/
+void fifo_push(struct LNode** head_ref, int pid, int actual_pid,  int frame, int page_numb){
+	/* allocate node */
+    struct LNode* new_node =
+             (struct LNode*) malloc(sizeof(struct LNode));
+
+    /* put in the key  */
+    new_node->pid  = pid;
+	new_node->actual_pid = actual_pid;
+	new_node->frame = frame;
+	new_node->page_numb = page_numb;
+
+    /* link the old list off the new node */
+    new_node->next = (*head_ref);
+
+    /* move the head to point to the new node */
+    (*head_ref)    = new_node;
+}
+/*
+	FIFO pop
+*/
+struct LNode* fifo_pop(struct LNode** head){
+	struct LNode* temp = (*head);
+	(*head) = temp->next;
+	return temp;
+}
+
+/* Function to print nodes in a given linked list. fpitr is used
+   to access the function to be used for printing current node data.
+   Note that different data types need different specifier in printf() */
+void print_list(struct LNode *node)
+{
+    while (node != NULL)
+    {
+        fprintf(stderr, ", %d", (node->frame));
+        node = node->next;
+    }
+    fprintf(stderr, "\n\n");
+}
+

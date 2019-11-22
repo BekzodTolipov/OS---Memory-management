@@ -105,7 +105,7 @@ int main(int argc, char *argv[]){
 			
 			//Wait for grant
 			msgrcv(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), getpid(), 0);
-			fprintf(stderr, "USER GRANTED: Received message letting me know that its granted and changed addreess to (%d)\n", pcb[pid].pg_tbl[(pn.page_numb>>10)].address);
+		//	fprintf(stderr, "USER GRANTED: Received message letting me know that its granted and changed addreess to (%d)\n", pcb[pid].pg_tbl[(pn.page_numb>>10)].address);
 			msg.mtype = 1;
 			msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
 			allowed = false;
@@ -152,7 +152,7 @@ int main(int argc, char *argv[]){
 				msgsnd(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), 0);
 			
 				msgrcv(msg_q_id, &msg, (sizeof(struct Message) - sizeof(long)), getpid(), 0);
-				fprintf(stderr, "USER FINISHED: OSS let me to turn off \n\n");
+			//	fprintf(stderr, "USER FINISHED: OSS let me to turn off \n\n");
 				break;
 			}
 		//	else{
