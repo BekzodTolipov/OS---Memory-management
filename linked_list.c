@@ -35,8 +35,8 @@ int main(int argc, char *argv[]){
 	printf("Is element (%d) in list?\n", 20);
 	search(start, 20)? printf("Yes\n") : printf("No\n"); 
 
-    printf("After delete element linked list is (%d)\n", 20); 
-	delete_el(&start, 20);
+    printf("After delete element linked list is (%d)\n", 10); 
+	delete_el(&start, 10);
     printList(start); 
   
     // Create and print a float linked list 
@@ -103,8 +103,15 @@ void delete_el(struct Node** head, int x)
     while (current != NULL)
     {
         if (current->data == x){
-            prev->next = current->next;
-			free(current);
+			if(prev != NULL){
+				prev->next = current->next;
+				free(current);
+			}
+			else{
+				prev = current;
+				(*head) = current->next;
+				free(prev);
+			}
 			break;
 		}
 		prev = current;

@@ -31,6 +31,14 @@ static key_t key;
 static struct Queue *queue;
 static struct Clock fork_time;
 unsigned int num_resources_granted = 0;
+struct LNode* fifo_head = NULL;
+struct LNode* lru_head = NULL;
+unsigned int page_faults = 0;
+unsigned int total_requests = 0;
+unsigned int granted = 0;
+unsigned int total_fifo = 0;
+unsigned int total_lru = 0;
+bool fifo_or_lru = true;
 
 //Shared memory
 static int msg_q_id, semid, pcb_shmid, clock_shmid = -1;
@@ -51,6 +59,8 @@ static void setupinterrupt();
 static void myhandler(int s);
 unsigned int random_time_elapsed();
 int get_free_frame();
+int clear_and_pop();
+void print_statistics();
 
 void wait_for_all_children();
 void cleanup_and_exit();
@@ -80,18 +90,19 @@ int main(int argc, char *argv[]){
 	char file_name[MAXCHAR] = "log.dat";
 	int max_time = 5;
 	int c;
-	bool verbose = 0;
+	//bool fifo_or_lru = true;
+//	bool verbose = 0;
 	srand(time(NULL));
 
 	// Read the arguments given in terminal
-	while ((c = getopt (argc, argv, "hv")) != -1){
+	while ((c = getopt (argc, argv, "hl")) != -1){
 		switch (c)
 		{
 			case 'h':
-				printf("To run the program you have following options:\n\n[ -h for help]\n[ -v verbose ]\nTo execute the file follow the code:\n./%s [ -h ] or any other options", argv[0]);
+				printf("To run the program you have following options:\n\n[ -h for help]\n[ -l for LRU (default FIFO) ]\nTo execute the file follow the code:\n./%s [ -h ] or any other options", argv[0]);
 				return 0;
-			case 'v':
-				verbose = 1;
+			case 'l':
+				fifo_or_lru = false;
 				break;
 			default:
 				fprintf(stderr, "ERROR: Wrong Input is Given!");
@@ -231,6 +242,7 @@ int main(int argc, char *argv[]){
 					break;
 				}
 				else{
+					total_process++;
 					//fprintf(stderr, "MASTER: Current (%d) is open at time %d.%d\n", id, system_clock->sec, system_clock->ns);
 					bit_map[id / 8] |= (1 << (id % 8));
 					
@@ -319,6 +331,11 @@ int main(int argc, char *argv[]){
 			if(master_msg.read_or_write == true){
 				//fprintf(stderr, "MASTER: User let me know that it wrote to a memory\n");
 				pcb[q_id].pg_tbl[(master_msg.page_number>>10)].dirty = 1;
+				if(!fifo_or_lru){
+					total_lru++;
+					struct LNode* move_down = fifo_pop(&lru_head);
+					fifo_push(&lru_head, move_down->pid, move_down->actual_pid, move_down->frame, move_down->page_numb);
+				}
 				
 				//Tell its recieved
 			//	master_msg.mtype = pcb[q_id].actual_pid;
@@ -334,17 +351,51 @@ int main(int argc, char *argv[]){
 			// Check if it is a request
 			if(master_msg.is_request == true)
 			{	
+				granted++;
+				total_requests++;
 				fprintf(stderr, "MASTER REQUEST: process with PID (%d) [%d] is REQUESTING resources. Granting request...\n",
 					master_msg.pid, master_msg.actual_pid);
+				page_faults++;
 				pcb[q_id].pg_tbl[(master_msg.page_number>>10)].valid = 1;
 				int frame = get_free_frame();
 				if(frame != -1){
 					pcb[q_id].pg_tbl[(master_msg.page_number>>10)].address = frame;
+					if(fifo_or_lru){
+						fifo_push(&fifo_head, q_id, master_msg.actual_pid, frame, (master_msg.page_number>>10));
+				//	print_list(fifo_head);
+					}
+					else{
+						fifo_push(&lru_head, q_id, master_msg.actual_pid, frame, (master_msg.page_number>>10));
+					}
 				}
 				else{
-					pcb[q_id].pg_tbl[(master_msg.page_number>>10)].address = 257;
-					fprintf(stderr, "\n\nMASTER MEM_FAULT: page fault not enough memory fram#: [%d]\n\n", pcb[q_id].pg_tbl[(master_msg.page_number>>10)].address);
-					sleep(1);
+					if(fifo_or_lru){
+						//FIFO Stuff
+						fprintf(stderr, "FIFO BEFORE POP: \n");
+						print_list(fifo_head);
+						page_faults++;
+						frame = clear_and_pop();
+						total_fifo++;
+						fprintf(stderr, "FIFO AFTER POP: \n");
+						print_list(fifo_head);
+						fifo_push(&fifo_head, q_id, master_msg.actual_pid, frame, (master_msg.page_number>>10));
+					}
+					else{
+						//LRU Stuff
+						fprintf(stderr, "LRU BEFORE POP: \n");
+						print_list(lru_head);
+						page_faults++;
+						frame = clear_and_pop();                    
+						total_lru++;
+						fprintf(stderr, "LRU AFTER POP: \n");
+						print_list(lru_head);
+						fifo_push(&lru_head, q_id, master_msg.actual_pid, frame, (master_msg.page_number>>10));
+					}
+					//Give the frame to new process
+					pcb[q_id].pg_tbl[(master_msg.page_number>>10)].address = frame;
+					//fifo_push(&fifo_head, q_id, master_msg.actual_pid, frame, (master_msg.page_number>>10));
+					//fprintf(stderr, "\n\nMASTER MEM_FAULT: page fault not enough memory fram#: [%d]\n\n", pcb[q_id].pg_tbl[(master_msg.page_number>>10)].address);
+				//	sleep(1);
 				}
 
 				//Send a message to child process whether if it safe to proceed the request OR not
@@ -401,7 +452,37 @@ int main(int argc, char *argv[]){
 	return 0;
 }
 
+/*****************************************
+	Print statistics for program run.
+*****************************************/
+void print_statistics() {
+    char buffer[2000];
 
+    sprintf(buffer, "<<<Statistics>>>\n");
+    sprintf(buffer + strlen(buffer), "  %-22s: %'d\n", "Total Processes", total_process);
+    sprintf(buffer + strlen(buffer), "  %-22s: %'d\n", "Total Granted Requests", granted);
+    sprintf(buffer + strlen(buffer), "  %-22s: %'d\n", "Total Requests", total_requests);
+    sprintf(buffer + strlen(buffer), "  %-22s: %'d\n", "Total FIFO ran", total_fifo);
+    sprintf(buffer + strlen(buffer), "  %-22s: %'d\n", "Total LRU ran", total_lru);
+
+    sprintf(buffer + strlen(buffer), "\n");
+    
+    fprintf(stderr, buffer);
+}
+
+int clear_and_pop(){
+	struct LNode* fr;
+	if(fifo_or_lru){
+		fr = fifo_pop(&fifo_head);
+	}
+	else{
+		fr = fifo_pop(&lru_head);
+	}
+	pcb[fr->pid].pg_tbl[fr->page_numb].address = 0;
+	pcb[fr->pid].pg_tbl[fr->page_numb].valid = 0;
+	pcb[fr->pid].pg_tbl[fr->page_numb].protn = 0;
+	return fr->frame;
+}
 
 int get_free_frame(){
 	int proc_count = 0;
@@ -621,6 +702,7 @@ void cleanup_and_exit() {
 	{
 		semctl(semid, 0, IPC_RMID);
 	}
+	print_statistics();
     fclose(fptr);
     //exit(0);
 	//return -1;
