@@ -44,6 +44,7 @@ struct page{
 };
 
 int main(int argc, char *argv[]){
+	processInterrupt();
 	srand(time(NULL) ^ getpid());
 	/* =====Getting semaphore===== */
 	key_t key = ftok("./oss.c", 21);
@@ -190,26 +191,28 @@ void processInterrupt()
 	sigemptyset(&sa1.sa_mask);
 	sa1.sa_handler = &processHandler;
 	sa1.sa_flags = SA_RESTART;
-	if(sigaction(SIGUSR1, &sa1, NULL) == -1)
+	if(sigemptyset(&sa1.sa_mask) || sigaction(SIGTERM, &sa1, NULL) == -1)
 	{
+		fprintf(stderr, "ERROR: Failed to set up handler");
 		perror("ERROR");
+		exit(1);
 	}
 
-	struct sigaction sa2;
-	sigemptyset(&sa2.sa_mask);
-	sa2.sa_handler = &processHandler;
-	sa2.sa_flags = SA_RESTART;
-	if(sigaction(SIGINT, &sa2, NULL) == -1)
-	{
-		perror("ERROR");
-	}
+//	struct sigaction sa2;
+//	sigemptyset(&sa2.sa_mask);
+//	sa2.sa_handler = &processHandler;
+//	sa2.sa_flags = SA_RESTART;
+//	if(sigaction(SIGINT, &sa2, NULL) == -1)
+//	{
+//		perror("ERROR");
+//	}
 }
 void processHandler(int signum)
 {
-	printf("%d: Terminated!\n", getpid());
+	//printf("%d: Terminated!\n", getpid());
 	detach_from_shared_memory(pcb);
 	detach_from_shared_memory(system_clock);
-	exit(2);
+	exit(1);
 }
 
 /* ====================================================================================================
