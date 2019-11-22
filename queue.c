@@ -7,12 +7,6 @@
 #include "queue.h"
 
 
-/* ====================================================================================================
-* Function    :  createQueue()
-* Definition  :  A utility function to create an empty queue.
-* Parameter   :  None.
-* Return      :  Struct Queue.
-==================================================================================================== */
 struct Queue *createQueue()
 {
 	struct Queue *q = (struct Queue *)malloc(sizeof(struct Queue));
@@ -23,12 +17,6 @@ struct Queue *createQueue()
 }
 
 
-/* ====================================================================================================
-* Function    :  newNode()
-* Definition  :  A utility function to create a new linked list node. 
-* Parameter   :  Integer index.
-* Return      :  Struct QNode.
-==================================================================================================== */
 struct QNode *newNode(int index)
 { 
     struct QNode *temp = (struct QNode *)malloc(sizeof(struct QNode));
@@ -38,12 +26,6 @@ struct QNode *newNode(int index)
 } 
 
 
-/* ====================================================================================================
-* Function    :  enQueue()
-* Definition  :  The function to add a struct ProcessControlBlock to given queue.
-* Parameter   :  Struct Queue, and struct ProcessControlBlock.
-* Return      :  None.
-==================================================================================================== */
 void enQueue(struct Queue *q, int index) 
 { 
 	//Create a new LL node
@@ -65,12 +47,6 @@ void enQueue(struct Queue *q, int index)
 }
 
 
-/* ====================================================================================================
-* Function    :  deQueue()
-* Definition  :  Function to remove a struct ProcessControlBlock from given queue.
-* Parameter   :  Struct Queue.
-* Return      :  Struct QNode.
-==================================================================================================== */
 struct QNode *deQueue(struct Queue *q) 
 {
 	//If queue is empty, return NULL
@@ -96,12 +72,6 @@ struct QNode *deQueue(struct Queue *q)
 } 
 
 
-/* ====================================================================================================
-* Function    :  isQueueEmpty()
-* Definition  :  Check if given queue is empty or not.
-* Parameter   :  Struct Queue.
-* Return      :  True or false.
-==================================================================================================== */
 bool isQueueEmpty(struct Queue *q)
 {
 	if(q->rear == NULL)
@@ -115,12 +85,6 @@ bool isQueueEmpty(struct Queue *q)
 }
 
 
-/* ====================================================================================================
-* Function    :  getQueueCount()
-* Definition  :  A utility function to return queue count. 
-* Parameter   :  Struct Queue.
-* Return      :  Queue count.
-==================================================================================================== */
 int getQueueCount(struct Queue *q)
 {
 	return (q->count);	

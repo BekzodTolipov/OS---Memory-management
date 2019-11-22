@@ -1,3 +1,14 @@
+/************************************************************************************************
+	Program Description: This program is designed to demonstrate how memory is managed in 
+	this simulated operating system. The OSS will start with creating all necessary shared mem-
+	mories and initialize. Default program will run FIFO page replacement algorithm when main
+	memory is full and increment number of page_faults. Program has option to run with LRU page
+	replacement algorithm by typing option -l at the run time.
+
+	Author: Bekzod Tolipov
+	Date: 11/22/2019
+************************************************************************************************/
+
 #include <stdlib.h>     //exit()
 #include <stdio.h>      //printf()
 #include <stdbool.h>    //bool variable
@@ -93,8 +104,6 @@ int main(int argc, char *argv[]){
 	int max_time = 5;
 	int c;
 	char dummy[MAXCHAR];
-	//bool fifo_or_lru = true;
-//	bool verbose = 0;
 	srand(time(NULL));
 
 	// Read the arguments given in terminal
@@ -212,7 +221,6 @@ int main(int argc, char *argv[]){
 				}
 
 				if(proc_count >= MAX_PROCESS - 1){
-					//fprintf(stderr, "%s: bitmap is full (size: %d)\n", MAX_PROCESS);
 					break;
 				}
 				proc_count++;
@@ -252,7 +260,6 @@ int main(int argc, char *argv[]){
 				}
 				else{
 					total_process++;
-					//fprintf(stderr, "MASTER: Current (%d) is open at time %d.%d\n", id, system_clock->sec, system_clock->ns);
 					bit_map[id / 8] |= (1 << (id % 8));
 					child_pids[id] = child_pid;
 					
@@ -279,7 +286,6 @@ int main(int argc, char *argv[]){
 
 		int current_iteration = 0;
 		next.next = queue->front;
-		//char buffer[2000];
 		while(next.next != NULL){
 			sem_lock(0);
 			incr_clock(system_clock, random_time_elapsed());
@@ -290,21 +296,16 @@ int main(int argc, char *argv[]){
 			master_msg.mtype = pcb[q_id].actual_pid;
 			master_msg.pid = q_id;
 			master_msg.actual_pid = pcb[q_id].actual_pid;
-		//	fprintf(stderr, "~~MASTER: Sending message to user (%d)\n", pcb[q_id].actual_pid);
 			msgsnd(msg_q_id, &master_msg, (sizeof(struct Message) - sizeof(long)), 0);
 
 			//Waiting for the specific child to respond back
 			msgrcv(msg_q_id, &master_msg, (sizeof(struct Message) - sizeof(long)), 1, 0);
-	//		fprintf(stderr, "~~MASTER: Received message from user\n");
 			
 			if(master_msg.flag == 0){	// Remove from queue process
-				//sprintf(buffer, master_msg.mtext);
 				print_and_write(master_msg.mtext);
-				//	memset(buffer, 0, sizeof(buffer));
 				sprintf(buffer, "MASTER: process with PID (%d) [%d] has finish running at my time %d.%d\n", master_msg.pid, master_msg.actual_pid, system_clock->sec, system_clock->ns);
 				print_and_write(buffer);
 					memset(buffer, 0, sizeof(buffer));
-				//sleep(1);
 				master_msg.mtype = pcb[q_id].actual_pid;
 				msgsnd(msg_q_id, &master_msg, (sizeof(struct Message) - sizeof(long)), 0);
 				//Remove the process out of the queue
@@ -329,7 +330,6 @@ int main(int argc, char *argv[]){
 				while(!isQueueEmpty(t_queue))
 				{
 					int i = t_queue->front->index;
-					//DEBUG fprintf(stderr, "Tracking Queue i: %d\n", i);
 					enQueue(queue, i);
 					deQueue(t_queue);
 				}
@@ -348,10 +348,6 @@ int main(int argc, char *argv[]){
 			sem_release(0);
 			
 			if(master_msg.read_or_write == true){
-			//		memset(buffer, 0, sizeof(buffer));
-			//	sprintf(buffer, master_msg.mtext);
-			//	print_and_write(buffer);
-			//		memset(buffer, 0, sizeof(buffer));
 				sprintf(buffer, "USER MODIFIED: PID(%d) User let me know that it modified block updating dirty bit at time %d.%d\n", q_id, system_clock->sec, system_clock->ns);
 				print_and_write(buffer);
 				pcb[q_id].pg_tbl[(master_msg.page_number>>10)].dirty = 1;
@@ -360,12 +356,6 @@ int main(int argc, char *argv[]){
 					struct LNode* move_down = fifo_pop(&lru_head);
 					fifo_push(&lru_head, move_down->pid, move_down->actual_pid, move_down->frame, move_down->page_numb);
 				}
-				
-				//Tell its recieved
-			//	master_msg.mtype = pcb[q_id].actual_pid;
-			//	msgsnd(msg_q_id, &master_msg, (sizeof(struct Message) - sizeof(long)), 0);
-				//Trying to synchronized
-			//	misgrcv(msg_q_id, &master_msg, (sizeof(struct Message) - sizeof(long)), 1, 0);
 			} //End of READ/WRITE
 
 			sem_lock(0);
@@ -375,24 +365,19 @@ int main(int argc, char *argv[]){
 			// Check if it is a request
 			if(master_msg.is_request == true)
 			{	
-				//	memset(buffer, 0, sizeof(buffer));
-				//sprintf(buffer, master_msg.mtext);
 				print_and_write(master_msg.mtext);
-				//	memset(buffer, 0, sizeof(buffer));
 				granted++;
 				total_requests++;
 				sprintf(buffer, "MASTER REQUEST: process with PID (%d) [%d] is REQUESTING frame from main memory. Granting request... at time %d.%d\n",
 					master_msg.pid, master_msg.actual_pid, system_clock->sec, system_clock->ns);
 				print_and_write(buffer);
-					memset(buffer, 0, sizeof(buffer));
+				memset(buffer, 0, sizeof(buffer));
 				page_faults++;
 				pcb[q_id].pg_tbl[(master_msg.page_number>>10)].valid = 1;
 				int frame = get_free_frame();
 				if(frame != -1){
-					//pcb[q_id].pg_tbl[(master_msg.page_number>>10)].address = frame;
 					if(fifo_or_lru){
 						fifo_push(&fifo_head, q_id, master_msg.actual_pid, frame, (master_msg.page_number>>10));
-				//	print_list(fifo_head);
 					}
 					else{
 						fifo_push(&lru_head, q_id, master_msg.actual_pid, frame, (master_msg.page_number>>10));
@@ -401,32 +386,22 @@ int main(int argc, char *argv[]){
 				else{
 					if(fifo_or_lru){
 						//FIFO Stuff
-					//	fprintf(stderr, "FIFO BEFORE POP: \n");
-					//	print_list(fifo_head);
 						page_faults++;
 						frame = clear_and_pop();
 	memset(main_memory, '\0', sizeof(main_memory));
 						total_fifo++;
-					//	fprintf(stderr, "FIFO AFTER POP: \n");
-					//	print_list(fifo_head);
 						fifo_push(&fifo_head, q_id, master_msg.actual_pid, frame, (master_msg.page_number>>10));
 					}
 					else{
 						//LRU Stuff
-					//	fprintf(stderr, "LRU BEFORE POP: \n");
-					//	print_list(lru_head);
 						page_faults++;
 						frame = clear_and_pop();                    
 						total_lru++;
-					//	fprintf(stderr, "LRU AFTER POP: \n");
-					//	print_list(lru_head);
 						fifo_push(&lru_head, q_id, master_msg.actual_pid, frame, (master_msg.page_number>>10));
 					}
 					//Give the frame to new process
 					pcb[q_id].pg_tbl[(master_msg.page_number>>10)].address = frame;
-					//fifo_push(&fifo_head, q_id, master_msg.actual_pid, frame, (master_msg.page_number>>10));
 					sprintf(buffer, "\nMASTER MEM_FAULT: page fault not enough memory frame swap executed at time %d.%d\n\n", system_clock->sec, system_clock->ns);
-				//	sleep(1);
 					print_and_write(buffer);
 					memset(buffer, 0, sizeof(buffer));
 				}
@@ -438,12 +413,6 @@ int main(int argc, char *argv[]){
 			
 				//Trying to synchronized
 				msgrcv(msg_q_id, &master_msg, (sizeof(struct Message) - sizeof(long)), 1, 0);
-
-				//Check if its read or write
-				
-				//wait for message
-				//if write than dirty bit is up
-
 			} //End of Request flag
 
 			//Increase iterration
@@ -513,7 +482,11 @@ void print_statistics() {
     
     print_and_write(buffer);
 }
-
+/**************************************
+	Pops the first element in a linked
+	lis than clear out that element
+	from being in main memory
+**************************************/
 int clear_and_pop(){
 	struct LNode* fr;
 	if(fifo_or_lru){
@@ -527,7 +500,9 @@ int clear_and_pop(){
 	pcb[fr->pid].pg_tbl[fr->page_numb].protn = 0;
 	return fr->frame;
 }
-
+/**************************************
+	Find a free frame in main memory
+**************************************/
 int get_free_frame(){
 	int proc_count = 0;
 	//bool is_bit_open = false;
@@ -550,13 +525,10 @@ int get_free_frame(){
 	
 }
 
-
-/* ====================================================================================================
-* Function    :  initPCB()
-* Definition  :  Init process control block table.
-* Parameter   :  Struct ProcessControl Block.
-* Return      :  None.
-==================================================================================================== */
+/**************************************
+	Initialize process control block
+	to empty stage
+**************************************/
 void __init_pcb_start(struct process_control_block *pcb)
 {
 	int i;
@@ -566,7 +538,10 @@ void __init_pcb_start(struct process_control_block *pcb)
 		pcb[i].actual_pid = -1;
 	}		
 }
-
+/**************************************
+	Populate pcb with created child
+	information
+**************************************/
 void __init_pcb(struct process_control_block *pcb, int id, pid_t pid)
 {
 	pcb->pid = id;
@@ -697,36 +672,18 @@ struct Clock get_fork_time_new_proc(struct Clock system_clock) {
 	Terminate all existing processes
 ***************************************/
 void terminate_children() {
-	//fprintf(stderr, "\nLimitation has reached! Invoking termination...\n");
-	//kill(0, SIGUSR1);
-	//pid_t p = 0;
-	//while(p >= 0)
-	//{
-	//	p = waitpid(-1, NULL, WNOHANG);
-	//}
 	fprintf(stderr, "\nTerminate sequence initiated..\n");
 	int id;
-	//int proc_count = 0;
 	for(id = 0; id < MAX_PROCESS; id++){
-		//id = (id+1) % MAX_PROCESS;
-		//uint32_t bit = bit_map[id / 8] & (1 << (id % 8));
-	//	if(bit == 1){
-			if(child_pids[id] != 0){
-				if(kill(child_pids[id], 0) == 0){
-					fprintf(stdout, "TERMINATE: PID(%d)\n", child_pids[id]);
-					if(kill(child_pids[id], SIGTERM) != 0){
-						perror("Child can't be terminated for unkown reason\n");
-					}
+		if(child_pids[id] != 0){
+			if(kill(child_pids[id], 0) == 0){
+				fprintf(stdout, "TERMINATE: PID(%d)\n", child_pids[id]);
+				if(kill(child_pids[id], SIGTERM) != 0){
+					perror("Child can't be terminated for unkown reason\n");
 				}
 			}
-		//}
-
-	//	if(proc_count >= MAX_PROCESS - 1){
-					//fprintf(stderr, "%s: bitmap is full (size: %d)\n", MAX_PROCESS);
-	//		break;
-	//	}
-	//	proc_count++;
-	} //End of bit_map
+		}
+	}
 }
 
 /**************************************
@@ -737,20 +694,14 @@ void cleanup_and_exit() {
     fprintf(stdout, "OSS: Removing message queues and shared memory\n");
     fprintf(fptr, "OSS: Removing message queues and shared memory\n");
     remove_message_queue(msg_q_id);
-   // wait_for_all_children();
     cleanup_shared_memory(clock_shmid, system_clock);
     cleanup_shared_memory(pcb_shmid, pcb);
-   // free(blocked);
-   // free(total_blocked_time);
-	//Delete semaphore
 	if(semid > 0)
 	{
 		semctl(semid, 0, IPC_RMID);
 	}
 	print_statistics();
     fclose(fptr);
-    //exit(0);
-	//return -1;
 }
 
 // ===============================================   Interrupt handler   =============================== //
@@ -811,15 +762,12 @@ static void myhandler(int s){
 
 }
 
-
 // =========================================   Semaphore set up   ======================================= //
 
-/* ====================================================================================================
-* Function    :  semaLock()
-* Definition  :  Invoke semaphore lock of the given semaphore and index.
-* Parameter   :  Semaphore Index.
-* Return      :  None.
-==================================================================================================== */
+/**************************************
+	Used for locking clock while inc-
+	rementing as critical section
+**************************************/
 void sem_lock(int sem_index)
 {
 	sema_operation.sem_num = sem_index;
@@ -828,13 +776,9 @@ void sem_lock(int sem_index)
 	semop(semid, &sema_operation, 1);
 }
 
-
-/* ====================================================================================================
-* Function    :  semaRelease()
-* Definition  :  Release semaphore lock of the given semaphore and index.
-* Parameter   :  Semaphore Index.
-* Return      :  None.
-==================================================================================================== */
+/**************************************
+	Releases clock after modifying it
+**************************************/
 void sem_release(int sem_index)
 {	
 	sema_operation.sem_num = sem_index;
