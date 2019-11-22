@@ -61,6 +61,7 @@ unsigned int random_time_elapsed();
 int get_free_frame();
 int clear_and_pop();
 void print_statistics();
+void print_and_write(char* str);
 
 void wait_for_all_children();
 void cleanup_and_exit();
@@ -90,19 +91,24 @@ int main(int argc, char *argv[]){
 	char file_name[MAXCHAR] = "log.dat";
 	int max_time = 5;
 	int c;
+	char dummy[MAXCHAR];
 	//bool fifo_or_lru = true;
 //	bool verbose = 0;
 	srand(time(NULL));
 
 	// Read the arguments given in terminal
-	while ((c = getopt (argc, argv, "hl")) != -1){
+	while ((c = getopt (argc, argv, "hlt:")) != -1){
 		switch (c)
 		{
 			case 'h':
-				printf("To run the program you have following options:\n\n[ -h for help]\n[ -l for LRU (default FIFO) ]\nTo execute the file follow the code:\n./%s [ -h ] or any other options", argv[0]);
+				printf("To run the program you have following options:\n\n[ -h for help]\n[ -l for LRU (default FIFO) ] [ -t change timer ]\nTo execute the file follow the code:\n./%s [ -h ] or any other options", argv[0]);
 				return 0;
 			case 'l':
 				fifo_or_lru = false;
+				break;
+			case 't':
+				strncpy(dummy, optarg, 255);
+				max_time = atoi(dummy);
 				break;
 			default:
 				fprintf(stderr, "ERROR: Wrong Input is Given!");
@@ -187,6 +193,7 @@ int main(int argc, char *argv[]){
 	unsigned int id = -1;
 	bool is_bit_open = false;
 	bool already_clean = false;
+	char buffer[2000];
 	while(1){
 		if (compare_clocks(*system_clock, fork_time) >= 0) {	//Compare clock will return (a>b:1), (a==b:0), (a<b:-1)
 			is_bit_open = false;
@@ -251,7 +258,9 @@ int main(int argc, char *argv[]){
 					enQueue(queue, id);
 
 					//Display creation time
-					fprintf(stderr, "\n\nMASTER: generating process with PID (%d) [%d] and putting it in queue at time %d.%d\n", pcb[id].pid, pcb[id].actual_pid, system_clock->sec, system_clock->ns);
+					sprintf(buffer, "\n\nMASTER: generating process with PID (%d) [%d] and putting it in queue at time %d.%d\n", pcb[id].pid, pcb[id].actual_pid, system_clock->sec, system_clock->ns);
+					print_and_write(buffer);
+					memset(buffer, 0, sizeof(buffer));
 				//	fflush(fptr);
 				}
 			}
@@ -267,6 +276,7 @@ int main(int argc, char *argv[]){
 
 		int current_iteration = 0;
 		next.next = queue->front;
+		//char buffer[2000];
 		while(next.next != NULL){
 			sem_lock(0);
 			incr_clock(system_clock, random_time_elapsed());
@@ -285,11 +295,17 @@ int main(int argc, char *argv[]){
 	//		fprintf(stderr, "~~MASTER: Received message from user\n");
 			
 			if(master_msg.flag == 0){	// Remove from queue process
-				fprintf(stderr, "MASTER: process with PID (%d) [%d] has finish running at my time %d.%d\n", master_msg.pid, master_msg.actual_pid, system_clock->sec, system_clock->ns);
+				//sprintf(buffer, master_msg.mtext);
+				print_and_write(master_msg.mtext);
+				//	memset(buffer, 0, sizeof(buffer));
+				sprintf(buffer, "MASTER: process with PID (%d) [%d] has finish running at my time %d.%d\n", master_msg.pid, master_msg.actual_pid, system_clock->sec, system_clock->ns);
+				print_and_write(buffer);
+					memset(buffer, 0, sizeof(buffer));
+				//sleep(1);
 				master_msg.mtype = pcb[q_id].actual_pid;
 				msgsnd(msg_q_id, &master_msg, (sizeof(struct Message) - sizeof(long)), 0);
 				//Remove the process out of the queue
-				struct QNode delete_node;;
+				struct QNode delete_node;
 				delete_node.next = queue->front;
 				while(delete_node.next != NULL)
 				{
@@ -329,7 +345,12 @@ int main(int argc, char *argv[]){
 			sem_release(0);
 			
 			if(master_msg.read_or_write == true){
-				//fprintf(stderr, "MASTER: User let me know that it wrote to a memory\n");
+			//		memset(buffer, 0, sizeof(buffer));
+			//	sprintf(buffer, master_msg.mtext);
+			//	print_and_write(buffer);
+			//		memset(buffer, 0, sizeof(buffer));
+				sprintf(buffer, "USER MODIFIED: PID(%d) User let me know that it modified block updating dirty bit at time %d.%d\n", q_id, system_clock->sec, system_clock->ns);
+				print_and_write(buffer);
 				pcb[q_id].pg_tbl[(master_msg.page_number>>10)].dirty = 1;
 				if(!fifo_or_lru){
 					total_lru++;
@@ -341,7 +362,7 @@ int main(int argc, char *argv[]){
 			//	master_msg.mtype = pcb[q_id].actual_pid;
 			//	msgsnd(msg_q_id, &master_msg, (sizeof(struct Message) - sizeof(long)), 0);
 				//Trying to synchronized
-			//	msgrcv(msg_q_id, &master_msg, (sizeof(struct Message) - sizeof(long)), 1, 0);
+			//	misgrcv(msg_q_id, &master_msg, (sizeof(struct Message) - sizeof(long)), 1, 0);
 			} //End of READ/WRITE
 
 			sem_lock(0);
@@ -351,15 +372,21 @@ int main(int argc, char *argv[]){
 			// Check if it is a request
 			if(master_msg.is_request == true)
 			{	
+				//	memset(buffer, 0, sizeof(buffer));
+				//sprintf(buffer, master_msg.mtext);
+				print_and_write(master_msg.mtext);
+				//	memset(buffer, 0, sizeof(buffer));
 				granted++;
 				total_requests++;
-				fprintf(stderr, "MASTER REQUEST: process with PID (%d) [%d] is REQUESTING resources. Granting request...\n",
-					master_msg.pid, master_msg.actual_pid);
+				sprintf(buffer, "MASTER REQUEST: process with PID (%d) [%d] is REQUESTING frame from main memory. Granting request... at time %d.%d\n",
+					master_msg.pid, master_msg.actual_pid, system_clock->sec, system_clock->ns);
+				print_and_write(buffer);
+					memset(buffer, 0, sizeof(buffer));
 				page_faults++;
 				pcb[q_id].pg_tbl[(master_msg.page_number>>10)].valid = 1;
 				int frame = get_free_frame();
 				if(frame != -1){
-					pcb[q_id].pg_tbl[(master_msg.page_number>>10)].address = frame;
+					//pcb[q_id].pg_tbl[(master_msg.page_number>>10)].address = frame;
 					if(fifo_or_lru){
 						fifo_push(&fifo_head, q_id, master_msg.actual_pid, frame, (master_msg.page_number>>10));
 				//	print_list(fifo_head);
@@ -371,31 +398,33 @@ int main(int argc, char *argv[]){
 				else{
 					if(fifo_or_lru){
 						//FIFO Stuff
-						fprintf(stderr, "FIFO BEFORE POP: \n");
-						print_list(fifo_head);
+					//	fprintf(stderr, "FIFO BEFORE POP: \n");
+					//	print_list(fifo_head);
 						page_faults++;
 						frame = clear_and_pop();
 						total_fifo++;
-						fprintf(stderr, "FIFO AFTER POP: \n");
-						print_list(fifo_head);
+					//	fprintf(stderr, "FIFO AFTER POP: \n");
+					//	print_list(fifo_head);
 						fifo_push(&fifo_head, q_id, master_msg.actual_pid, frame, (master_msg.page_number>>10));
 					}
 					else{
 						//LRU Stuff
-						fprintf(stderr, "LRU BEFORE POP: \n");
-						print_list(lru_head);
+					//	fprintf(stderr, "LRU BEFORE POP: \n");
+					//	print_list(lru_head);
 						page_faults++;
 						frame = clear_and_pop();                    
 						total_lru++;
-						fprintf(stderr, "LRU AFTER POP: \n");
-						print_list(lru_head);
+					//	fprintf(stderr, "LRU AFTER POP: \n");
+					//	print_list(lru_head);
 						fifo_push(&lru_head, q_id, master_msg.actual_pid, frame, (master_msg.page_number>>10));
 					}
 					//Give the frame to new process
 					pcb[q_id].pg_tbl[(master_msg.page_number>>10)].address = frame;
 					//fifo_push(&fifo_head, q_id, master_msg.actual_pid, frame, (master_msg.page_number>>10));
-					//fprintf(stderr, "\n\nMASTER MEM_FAULT: page fault not enough memory fram#: [%d]\n\n", pcb[q_id].pg_tbl[(master_msg.page_number>>10)].address);
+					sprintf(buffer, "\nMASTER MEM_FAULT: page fault not enough memory frame swap executed at time %d.%d\n\n", system_clock->sec, system_clock->ns);
 				//	sleep(1);
+					print_and_write(buffer);
+					memset(buffer, 0, sizeof(buffer));
 				}
 
 				//Send a message to child process whether if it safe to proceed the request OR not
@@ -444,12 +473,16 @@ int main(int argc, char *argv[]){
 
 	} //End of Main Loop
 
-	fprintf(stderr, "MASTER IS FUCKING US\n");
 	if(!already_clean){	//If cleaned up after fork failed dont clean again
 		cleanup_and_exit();
 	}
 
 	return 0;
+}
+
+void print_and_write(char* str) {
+    fputs(str, stdout);
+    fputs(str, fptr);
 }
 
 /*****************************************
@@ -467,7 +500,7 @@ void print_statistics() {
 
     sprintf(buffer + strlen(buffer), "\n");
     
-    fprintf(stderr, buffer);
+    print_and_write(buffer);
 }
 
 int clear_and_pop(){
@@ -493,12 +526,12 @@ int get_free_frame(){
         uint32_t bit = main_memory[frame_numb / 8] & (1 << (frame_numb % 8));
         if(bit == 0){
 			main_memory[frame_numb / 8] |= (1 << (frame_numb % 8));
-			fprintf(stderr, "--MASTER MAIN MEMEORY SLOT [%d]\n", frame_numb);
+		//	fprintf(stderr, "--MASTER MAIN MEMEORY SLOT [%d]\n", frame_numb);
             return frame_numb;
         }
         
         if(proc_count >= (MAIN_MEMORY_SIZE*8)){
-            fprintf(stderr, "++OSS: frame counter:[%d])\n", frame_numb);
+        //    fprintf(stderr, "++OSS: frame counter:[%d])\n", frame_numb);
             return -1;
         }
         proc_count++;
@@ -532,7 +565,7 @@ void __init_pcb(struct process_control_block *pcb, int id, pid_t pid)
 	for(i = 0; i < PAGE_TABLE_SIZE; i++)
 	{
 		pcb->pg_tbl[i].address = 0;
-		pcb->pg_tbl[i].protn = 0;
+		pcb->pg_tbl[i].protn = rand()%2? 1 : 0;
 		pcb->pg_tbl[i].dirty = 0;
 		pcb->pg_tbl[i].valid = 0;
 	}
@@ -660,7 +693,7 @@ void terminate_children() {
 	//{
 	//	p = waitpid(-1, NULL, WNOHANG);
 	//}
-	fprintf(stderr, "\nALL KIDS DIE\n");
+	fprintf(stderr, "\nTerminate sequence initiated..\n");
 	int id = -1;
 	int proc_count = 0;
 	while(1){
@@ -689,7 +722,7 @@ void terminate_children() {
 **************************************/
 void cleanup_and_exit() {
     terminate_children();
-    printf("OSS: Removing message queues and shared memory\n");
+    fprintf(stdout, "OSS: Removing message queues and shared memory\n");
     fprintf(fptr, "OSS: Removing message queues and shared memory\n");
     remove_message_queue(msg_q_id);
    // wait_for_all_children();
@@ -760,7 +793,7 @@ static void setupinterrupt(){
 ************************/
 static void myhandler(int s){
 	
-	fprintf(stderr, "\n!!!Termination begin since timer reached its time!!!\n");
+	fprintf(stdout, "\n!!!Termination begin since timer reached its time!!!\n");
 	cleanup_and_exit();
 	exit(0);
 
