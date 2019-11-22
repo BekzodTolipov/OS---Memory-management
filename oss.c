@@ -348,11 +348,11 @@ int main(int argc, char *argv[]){
 			sem_release(0);
 			
 			if(master_msg.read_or_write == true){
-				sprintf(buffer, "USER MODIFIED: PID(%d) User let me know that it modified block updating dirty bit at time %d.%d\n", q_id, system_clock->sec, system_clock->ns);
+				sprintf(buffer, "\nUSER MODIFIED: PID(%d) User let me know that it modified block updating dirty bit at time %d.%d\n", q_id, system_clock->sec, system_clock->ns);
 				print_and_write(buffer);
 				pcb[q_id].pg_tbl[(master_msg.page_number>>10)].dirty = 1;
 				if(!fifo_or_lru){
-					total_lru++;
+				//	total_lru++;
 					struct LNode* move_down = fifo_pop(&lru_head);
 					fifo_push(&lru_head, move_down->pid, move_down->actual_pid, move_down->frame, move_down->page_numb);
 				}
@@ -477,6 +477,7 @@ void print_statistics() {
     sprintf(buffer + strlen(buffer), "  %-22s: %'d\n", "Total Requests", total_requests);
     sprintf(buffer + strlen(buffer), "  %-22s: %'d\n", "Total FIFO ran", total_fifo);
     sprintf(buffer + strlen(buffer), "  %-22s: %'d\n", "Total LRU ran", total_lru);
+    sprintf(buffer + strlen(buffer), "  %-22s: %'d\n", "Total Page Faults", page_faults);
 
     sprintf(buffer + strlen(buffer), "\n");
     
