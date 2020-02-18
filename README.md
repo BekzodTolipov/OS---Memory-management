@@ -9,14 +9,14 @@ To run the program:
 		./oss -l : specifies LRU for page replacement (default is FIFO).
 		./oss -t : specifies the timer that alarm will go off.
 
-## OSS:
+## OSS
 Program Description: This program is designed to demonstrate how memory is managed in
 this simulated operating system. The OSS will start with creating all necessary shared mem-
 mories and initialize. Default program will run FIFO page replacement algorithm when main
 memory is full and increment number of page_faults. Program has option to run with LRU page
 replacement algorithm by typing option -l at the run time.
   
-## USER:
+## USER
 Program Description: This program will be executed by child processes created in oss.
 It will start attaching to pcb and clock in shared memory.
 First process will check if page block is in main memory by checking its valid bit. If
